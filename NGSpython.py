@@ -43,3 +43,88 @@ with open("K0_filtered_CAG_counts.txt","w") as out:
         out.write(f"{seq}\t{count}\n")
 
 print("Filtering finished for K0")
+####
+# NGSpython_CAG_strict.py
+from collections import Counter
+import re
+
+LEFT = "CACATCACCAT"
+RIGHT = "CATCACGGAAA"
+MAX_CAG = 35  # maksymalna realistyczna liczba powtórzeń
+
+def max_CAG_run(seq):
+    """Znajdź najdłuższy nieprzerwany ciąg 'CAG' w sekwencji"""
+    runs = re.findall(r'(?:CAG)+', seq)
+    if not runs:
+        return 0
+    # zamiana długości w nukleotydach na liczbę powtórzeń
+    longest = max(len(r)//3 for r in runs)
+    return min(longest, MAX_CAG)
+
+def process_file(input_file, output_file):
+    counts = Counter()
+    pattern = re.compile(f"{LEFT}(.+?){RIGHT}")
+
+    with open(input_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            seq = parts[0]
+            read_count = int(parts[1]) if len(parts) > 1 else 1
+
+            match = pattern.search(seq)
+            if match:
+                inner_seq = match.group(1)
+                cag_len = max_CAG_run(inner_seq)
+                counts[cag_len] += read_count
+
+    with open(output_file, "w") as out:
+        out.write("CAG_length\tRead_count\n")
+        for length in sorted(counts):
+            out.write(f"{length}\t{counts[length]}\n")
+
+    print(f"Finished {input_file}. Results saved to {output_file}")
+
+# --- WYWOŁANIE ---
+process_file("D11_filtered_CAG_counts.txt", "D11_CAG_counts_summary_strict.txt")
+process_file("K0_filtered_CAG_counts.txt", "K0_CAG_counts_summary_strict.txt")
+#####
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Wczytanie plików z podsumowaniami
+df_d11 = pd.read_csv("D11_CAG_counts_summary_strict.txt", sep="\t")
+df_k0 = pd.read_csv("K0_CAG_counts_summary_strict.txt", sep="\t")
+
+# Obliczenie procentowego udziału
+df_d11['Percent'] = df_d11['Read_count'] / df_d11['Read_count'].sum() * 100
+df_k0['Percent'] = df_k0['Read_count'] / df_k0['Read_count'].sum() * 100
+
+# Połączenie długości CAG z obu próbek, aby wszystkie długości były na osi X
+all_lengths = sorted(set(df_d11['CAG_length']).union(df_k0['CAG_length']))
+
+# Tworzymy słowniki dla szybkiego odczytu udziałów
+d11_dict = dict(zip(df_d11['CAG_length'], df_d11['Percent']))
+k0_dict = dict(zip(df_k0['CAG_length'], df_k0['Percent']))
+
+# Przygotowanie list do wykresu (0% jeśli brak danej długości)
+d11_percent = [d11_dict.get(l, 0) for l in all_lengths]
+k0_percent = [k0_dict.get(l, 0) for l in all_lengths]
+
+# Wykres porównawczy
+plt.figure(figsize=(12,6))
+width = 0.4
+plt.bar([x - width/2 for x in all_lengths], d11_percent, width=width, label='D11', color='skyblue')
+plt.bar([x + width/2 for x in all_lengths], k0_percent, width=width, label='K0', color='salmon')
+
+plt.xlabel("Długość CAG")
+plt.ylabel("Procentowy udział [%]")
+plt.title("Porównanie długości powtórzeń CAG w D11 i K0")
+plt.xticks(all_lengths)
+plt.legend()
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.savefig("NGS_data_analysis/CAG_distribution.png", dpi=300)
+plt.show()
