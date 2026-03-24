@@ -128,3 +128,67 @@ plt.grid(axis='y', linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.savefig("NGS_data_analysis/CAG_distribution.png", dpi=300)
 plt.show()
+#statystyka#####
+#srednia dlugosc##
+def weighted_mean(df):
+    return (df['CAG_length'] * df['Read_count']).sum() / df['Read_count'].sum()
+
+print("D11 mean:", weighted_mean(df_d11))
+print("K0 mean:", weighted_mean(df_k0))
+#porównanie czyste skrocenia CAG i skrócenia z mutacjami przerywajacymi ciagłosc powtorzen CAG
+
+def calculate_percentages(summary_file, filtered_file):
+    # czyste CAG
+    df = pd.read_csv(summary_file, sep="\t")
+    clean_reads = df['Read_count'].sum()
+
+    # wszystkie ready
+    total_reads = 0
+    with open(filtered_file) as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) > 1:
+                total_reads += int(parts[1])
+
+    percent_clean = clean_reads / total_reads * 100
+    percent_mut = 100 - percent_clean
+
+    return percent_clean, percent_mut
+
+
+# --- D11 ---
+d11_clean, d11_mut = calculate_percentages(
+    "D11_CAG_counts_summary_strict.txt",
+    "D11_filtered_CAG_counts.txt"
+)
+
+# --- K0 ---
+k0_clean, k0_mut = calculate_percentages(
+    "K0_CAG_counts_summary_strict.txt",
+    "K0_filtered_CAG_counts.txt"
+)
+
+print(f"D11 -> Clean: {d11_clean:.2f}%, Mutations: {d11_mut:.2f}%")
+print(f"K0  -> Clean: {k0_clean:.2f}%, Mutations: {k0_mut:.2f}%")
+
+
+# 📊 --- WYKRES ---
+labels = ["D11", "K0"]
+clean_values = [d11_clean, k0_clean]
+mut_values = [d11_mut, k0_mut]
+
+x = range(len(labels))
+
+plt.figure(figsize=(8,6))
+
+plt.bar(x, clean_values, label="Czyste CAG")
+plt.bar(x, mut_values, bottom=clean_values, label="Mutacje (nieczyste)")
+
+plt.xticks(x, labels)
+plt.ylabel("Procent [%]")
+plt.title("Czyste powtórzenia CAG vs mutacje")
+plt.legend()
+
+plt.tight_layout()
+plt.savefig("NGS_data_analysis/CAG_clean_vs_mutations.png", dpi=300)
+plt.show()
